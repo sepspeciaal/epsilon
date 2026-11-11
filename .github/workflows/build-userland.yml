@@ -29,12 +29,12 @@ jobs:
           pip3 install lz4 pypng stringcase
 
       - name: Userland bouwen (slot A en B)
+        shell: bash
         run: |
           gcc --version
           arm-none-eabi-gcc --version
-          make clean
-          make -j$(nproc) userland.A.dfu MODEL=n0120 TARGET=device.n0120
-          make -j$(nproc) userland.B.dfu MODEL=n0120 TARGET=device.n0120
+          make SHELL=/bin/bash -j$(nproc) userland.A.dfu MODEL=n0120 TARGET=device.n0120
+          make SHELL=/bin/bash -j$(nproc) userland.B.dfu MODEL=n0120 TARGET=device.n0120
 
       - name: Bestanden uploaden
         uses: actions/upload-artifact@v4
