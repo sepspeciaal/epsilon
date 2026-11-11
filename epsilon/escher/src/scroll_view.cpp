@@ -1,5 +1,6 @@
 #include <escher/scroll_view.h>
 #include <escher/theme/color_picker.h>
+#include <escher/wallpaper.h>
 
 #include <new>
 extern "C" {
@@ -201,6 +202,10 @@ KDRect ScrollView::layoutDecorator(bool force) {
 }
 
 void ScrollView::InnerView::drawRect(KDContext* ctx, KDRect rect) const {
+  if (m_scrollView->drawsWallpaper()) {
+    Wallpaper::Draw(ctx, rect);
+    return;
+  }
   KDCoordinate height = bounds().height();
   KDCoordinate width = bounds().width();
   KDRect contentFrame = relativeChildFrame(m_scrollView->m_contentView);

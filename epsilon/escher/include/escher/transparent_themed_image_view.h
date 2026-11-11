@@ -18,6 +18,8 @@ class TransparentThemedImageView : public ThemedImageView {
     return type == Type::Label;
   }
   void setHighlighted(bool highlighted) override;
+  // Blend the transparent pixels with the custom wallpaper
+  void setBlendsWithWallpaper(bool blends) { m_blendsWithWallpaper = blends; }
 
  private:
   // App icon images are 55 x 56 = 3080
@@ -25,6 +27,7 @@ class TransparentThemedImageView : public ThemedImageView {
 
   void blendInPlace(KDColor* colorBuffer, uint8_t* alphaBuffer) const;
   ThemeComponent m_backgroundColor = ThemeComponent::DefaultBackground;
+  bool m_blendsWithWallpaper = false;
 };
 
 }  // namespace Escher

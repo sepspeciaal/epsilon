@@ -1,6 +1,7 @@
 #include <escher/metric.h>
 #include <escher/table_view.h>
 #include <escher/theme/color_picker.h>
+#include <escher/wallpaper.h>
 
 extern "C" {
 #include <assert.h>
@@ -112,7 +113,11 @@ void TableView::ContentView::drawSeparators(KDContext* ctx,
       if (!isColSeparator) {
         separator = separator.transposed();
       }
-      ctx->fillRect(separator, backgroundColor);
+      if (m_tableView->drawsWallpaper()) {
+        Wallpaper::Draw(ctx, separator);
+      } else {
+        ctx->fillRect(separator, backgroundColor);
+      }
     }
     currentCoordinate =
         isColSeparator ? subviewFrame.right() + 1 : subviewFrame.bottom() + 1;
@@ -126,7 +131,11 @@ void TableView::ContentView::drawSeparators(KDContext* ctx,
     if (!isColSeparator) {
       separator = separator.transposed();
     }
-    ctx->fillRect(separator, backgroundColor);
+    if (m_tableView->drawsWallpaper()) {
+      Wallpaper::Draw(ctx, separator);
+    } else {
+      ctx->fillRect(separator, backgroundColor);
+    }
   }
 }
 

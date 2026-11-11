@@ -101,6 +101,11 @@ class ScrollView : public View {
     decorator()->setBackgroundColor(m_backgroundColor);
   }
   ThemeComponent backgroundColor() const { return m_backgroundColor; }
+  // Draw the custom wallpaper instead of the background color
+  void setDrawsWallpaper(bool drawsWallpaper) {
+    m_drawsWallpaper = drawsWallpaper;
+  }
+  bool drawsWallpaper() const { return m_drawsWallpaper; }
 
   void setContentOffset(KDPoint offset);
   KDPoint contentOffset() const { return m_dataSource->offset(); }
@@ -173,6 +178,7 @@ class ScrollView : public View {
   mutable KDCoordinate m_excessHeight;
 
   ThemeComponent m_backgroundColor;
+  bool m_drawsWallpaper = false;
 };
 
 }  // namespace Escher

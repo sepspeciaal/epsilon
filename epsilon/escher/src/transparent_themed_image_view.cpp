@@ -1,6 +1,7 @@
 #include <escher/theme/color_picker.h>
 #include <escher/theme/highlight.h>
 #include <escher/transparent_themed_image_view.h>
+#include <escher/wallpaper.h>
 #include <ion.h>
 #include <omg/memory.h>
 
@@ -45,7 +46,20 @@ void TransparentThemedImageView::drawRect(KDContext* ctx, KDRect rect) const {
 
   uint8_t* mask =
       reinterpret_cast<uint8_t*>(pixelBuffer) + sizeof(KDColor) * imageSize;
-  blendInPlace(pixelBuffer, mask);
+  if (m_blendsWithWallpaper) {
+    KDPoint origin = ctx->origin();
+    for (int row = 0; row < image->height(); row++) {
+      for (int col = 0; col < image->width(); col++) {
+        int position = col + row * image->width();
+        pixelBuffer[position] = KDColor::Blend(
+            pixelBuffer[position],
+            Wallpaper::PixelAt(origin.x() + col, origin.y() + row),
+            mask[position]);
+      }
+    }
+  } else {
+    blendInPlace(pixelBuffer, mask);
+  }
 
   ctx->fillRectWithPixels(bounds(), pixelBuffer, nullptr);
 }

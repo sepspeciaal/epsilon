@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <escher/theme/color_picker.h>
 #include <escher/transparent_themed_image_view.h>
+#include <escher/wallpaper.h>
 
 using namespace Escher;
 
@@ -12,14 +13,13 @@ AppCell::AppCell()
     : HighlightCell(),
       m_messageNameView((I18n::Message)0, k_glyphsFormat),
       m_image(0, 0, nullptr, 0),
-      m_pointerNameView(nullptr, k_glyphsFormat) {}
+      m_pointerNameView(nullptr, k_glyphsFormat) {
+  m_iconView.setBlendsWithWallpaper(true);
+}
 
 void AppCell::drawRect(KDContext* ctx, KDRect rect) const {
-  KDSize nameSize = textView()->minimalSizeForOptimalDisplay();
-  ctx->fillRect(
-      KDRect(0, bounds().height() - nameSize.height() - 2 * k_nameHeightMargin,
-             bounds().width(), nameSize.height() + 2 * k_nameHeightMargin),
-      ColorPicker::Resolve(ThemeComponent::DefaultBackground));
+  // Draw the wallpaper behind the whole cell (icon and name)
+  Wallpaper::Draw(ctx, bounds());
 }
 
 int AppCell::numberOfSubviews() const { return isVisible() ? 2 : 0; }
