@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Code ophalen
         uses: actions/checkout@v4
@@ -30,6 +30,7 @@ jobs:
 
       - name: Userland bouwen (slot A en B)
         run: |
+          gcc --version
           arm-none-eabi-gcc --version
           make clean
           make -j$(nproc) userland.A.dfu MODEL=n0120 TARGET=device.n0120
