@@ -5,52 +5,34 @@ on:
   push:
     branches: [master]
 
+env:
+  MAKEFLAGS: -j4
+  # Moet gelijk zijn aan de softwareversie op je rekenmachine (Instellingen > Over)
+  APP_VERSION: 26.4.0
+
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Code ophalen
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        uses: actions/checkout@v6
 
-      - name: ARM-compiler 12.2 installeren
-        uses: carlosperate/arm-none-eabi-gcc-action@v1
+      - name: Bouw-container van NumWorks maken
+        uses: ./.github/actions/docker-builder
         with:
-          release: '12.2.Rel1'
-
-      - name: Afhankelijkheden installeren
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential imagemagick pkg-config \
-            libfreetype6-dev libjpeg-dev libpng-dev python3 python3-pip
-          if [ -f build/setup.sh ]; then bash build/setup.sh || true; fi
-          if [ -f requirements.txt ]; then pip3 install -r requirements.txt; fi
-          pip3 install lz4 pypng stringcase
+          platform: device
 
       - name: Userland bouwen (slot A en B)
-        shell: bash
-        run: |
-          gcc --version
-          arm-none-eabi-gcc --version
-          make SHELL=/bin/bash -j$(nproc) userland.A.dfu MODEL=n0120 TARGET=device.n0120
-          make SHELL=/bin/bash -j$(nproc) userland.B.dfu MODEL=n0120 TARGET=device.n0120
+        run: $DOCKER_RUN "make -C epsilon PLATFORM=n0120 APP_VERSION=$APP_VERSION custom_userland.dfu"
 
       - name: Laten zien wat er gebouwd is
         if: always()
-        shell: bash
-        run: |
-          echo "=== Mappen in de repo ==="
-          ls
-          echo "=== Alle .dfu/.bin/.elf in output ==="
-          find . -path ./node_modules -prune -o \( -name "*.dfu" -o -name "*.bin" -o -name "*.elf" \) -print 2>/dev/null | head -50
-          echo "=== README build-uitleg ==="
-          grep -n -i -E "make|PLATFORM|n0120|dfu" README.md | head -40 || true
+        run: find epsilon/output -name "*.dfu" -exec ls -la {} \;
 
       - name: Bestanden uploaden
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: userland-n0120
-          path: |
-            output/**/*.dfu
-            **/output/**/*.dfu
+          path: epsilon/output/**/userland.*.dfu
+          if-no-files-found: error
