@@ -23,8 +23,17 @@ jobs:
         with:
           platform: device
 
-      - name: Userland bouwen (slot A en B)
-        run: $DOCKER_RUN "make -C epsilon PLATFORM=n0120 APP_VERSION=$APP_VERSION custom_userland.dfu"
+      - name: Userland bouwen (slot A en B, met third-party apps)
+        run: $DOCKER_RUN "make -C epsilon PLATFORM=n0120 APP_VERSION=$APP_VERSION userland.allow3rdparty.A.dfu userland.allow3rdparty.B.dfu"
+
+      - name: Vaste namen geven (userland.A.dfu / userland.B.dfu)
+        run: |
+          mkdir -p upload
+          A=$(find epsilon/output -name "userland.allow3rdparty.A.dfu" | head -1)
+          B=$(find epsilon/output -name "userland.allow3rdparty.B.dfu" | head -1)
+          cp "$A" upload/userland.A.dfu
+          cp "$B" upload/userland.B.dfu
+          ls -la upload
 
       - name: Laten zien wat er gebouwd is
         if: always()
@@ -34,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: userland-n0120
-          path: epsilon/output/**/userland.*.dfu
+          path: upload/userland.*.dfu
           if-no-files-found: error
