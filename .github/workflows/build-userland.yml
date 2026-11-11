@@ -36,8 +36,21 @@ jobs:
           make SHELL=/bin/bash -j$(nproc) userland.A.dfu MODEL=n0120 TARGET=device.n0120
           make SHELL=/bin/bash -j$(nproc) userland.B.dfu MODEL=n0120 TARGET=device.n0120
 
+      - name: Laten zien wat er gebouwd is
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Mappen in de repo ==="
+          ls
+          echo "=== Alle .dfu/.bin/.elf in output ==="
+          find . -path ./node_modules -prune -o \( -name "*.dfu" -o -name "*.bin" -o -name "*.elf" \) -print 2>/dev/null | head -50
+          echo "=== README build-uitleg ==="
+          grep -n -i -E "make|PLATFORM|n0120|dfu" README.md | head -40 || true
+
       - name: Bestanden uploaden
         uses: actions/upload-artifact@v4
         with:
           name: userland-n0120
-          path: output/release/device/n0120/userland/*.dfu
+          path: |
+            output/**/*.dfu
+            **/output/**/*.dfu
