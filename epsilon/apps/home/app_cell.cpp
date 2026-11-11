@@ -4,6 +4,7 @@
 #include <escher/theme/color_picker.h>
 #include <escher/transparent_themed_image_view.h>
 #include <escher/wallpaper.h>
+#include <kandinsky/font.h>
 
 using namespace Escher;
 
@@ -20,6 +21,16 @@ AppCell::AppCell()
 void AppCell::drawRect(KDContext* ctx, KDRect rect) const {
   // Draw the wallpaper behind the whole cell (icon and name)
   Wallpaper::Draw(ctx, bounds());
+  if (!isHighlighted() && isVisible()) {
+    // Draw the name straight on the wallpaper, white with a dark outline
+    const char* name = textView()->text();
+    KDSize nameSize = KDFont::Font(KDFont::Size::Small)->stringSize(name);
+    KDPoint textOrigin((bounds().width() - nameSize.width()) / 2,
+                       bounds().height() - nameSize.height() -
+                           k_nameHeightMargin);
+    Wallpaper::DrawText(ctx, name, textOrigin, KDColor::RGB24(0xFFFFFF),
+                        KDColor::RGB24(0x101018));
+  }
 }
 
 int AppCell::numberOfSubviews() const { return isVisible() ? 2 : 0; }
@@ -35,6 +46,12 @@ void AppCell::layoutSubviews(bool force) {
                        k_iconWidth, k_iconHeight),
                 force);
   KDSize nameSize = textView()->minimalSizeForOptimalDisplay();
+  if (!isHighlighted()) {
+    /* The name is drawn directly on the wallpaper by drawRect; the text view
+     * (with its colored box) is only shown when the app is selected. */
+    setChildFrame(const_cast<TextView*>(textView()), KDRectZero, force);
+    return;
+  }
   setChildFrame(
       const_cast<TextView*>(textView()),
       KDRect((bounds().width() - nameSize.width()) / 2 - k_nameWidthMargin,
@@ -73,6 +90,8 @@ void AppCell::reloadCell() {
   t->setBackgroundColor(isHighlighted()
                             ? ThemeComponent::SurfaceSelectApps
                             : ThemeComponent::DefaultCellBackground);
+  layoutSubviews();
+  markWholeFrameAsDirty();
 }
 
 const Escher::TextView* AppCell::textView() const {
