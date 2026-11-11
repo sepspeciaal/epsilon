@@ -82,7 +82,7 @@ constexpr KDColor KDWhite = KDColor::RGB24(0xFFFFFF);
  * kernel. */
 namespace KDSpecialColors {
 // Theme (light / dark) signature colors (used for example in the title bar)
-constexpr KDColor k_lightThemeMain = KDColor::RGB24(0xFFB734);
+constexpr KDColor k_lightThemeMain = KDColor::RGB24(0x8d37e9);
 constexpr KDColor k_darkThemeMain = KDColor::RGB24(0xC3CAF4);
 // Theme (light / dark) neutral colors (black or white)
 constexpr KDColor k_lightThemeNeutral = KDWhite;
