@@ -24,13 +24,71 @@ bool appAtAddress(uint8_t* address) {
   return *reinterpret_cast<uint32_t*>(address) == k_magic;
 }
 
+/* Custom OS: when this userland runs in one slot and has no apps of its own,
+ * it uses the apps installed (by the NumWorks website) in the other slot. */
+static uint8_t* s_storageStart = nullptr;
+static uint8_t* s_storageEnd = nullptr;
+static bool s_usesOtherSlot = false;
+
+static bool looksLikeApp(uint8_t* address, uint8_t* end) {
+  if (!appAtAddress(address)) {
+    return false;
+  }
+  uint32_t* info = reinterpret_cast<uint32_t*>(address);
+  uint32_t size = info[static_cast<uint8_t>(App::AppInfo::AppSize)];
+  return info[static_cast<uint8_t>(App::AppInfo::MagicEnd)] == k_magic &&
+         size >= App::k_minAppSize &&
+         size <= static_cast<uint32_t>(end - address);
+}
+
+static void initStorage() {
+  if (s_storageStart != nullptr) {
+    return;
+  }
+  s_storageStart = &_external_apps_flash_start;
+  s_storageEnd = &_external_apps_flash_end;
+  if (appAtAddress(s_storageStart)) {
+    return;
+  }
+  constexpr uint32_t k_slotSize =
+      Ion::Device::Board::Config::ExternalFlashLength / 2;
+  constexpr uint32_t k_sector =
+      Ion::Device::Board::Config::ExternalAppsSectorUnit;
+  bool runsInSlotB = reinterpret_cast<uint32_t>(s_storageStart) >=
+                     Ion::Device::Board::Config::SlotBOrigin;
+  uint8_t* otherEnd =
+      runsInSlotB ? s_storageEnd - k_slotSize : s_storageEnd + k_slotSize;
+  uint8_t* otherSlotStart =
+      reinterpret_cast<uint8_t*>(runsInSlotB
+                                     ? Ion::Device::Board::Config::SlotAOrigin
+                                     : Ion::Device::Board::Config::SlotBOrigin);
+  for (uint8_t* address = otherSlotStart + k_sector;
+       address + App::k_minAppSize <= otherEnd; address += k_sector) {
+    if (looksLikeApp(address, otherEnd)) {
+      s_storageStart = address;
+      s_storageEnd = otherEnd;
+      s_usesOtherSlot = true;
+      return;
+    }
+  }
+}
+
+static uint8_t* storageStart() {
+  initStorage();
+  return s_storageStart;
+}
+
+static uint8_t* storageEnd() {
+  initStorage();
+  return s_storageEnd;
+}
+
 App::App(uint8_t* a) : m_startAddress(a) {
   assert(appAtAddress(m_startAddress));
 }
 
 bool addressWithinExternalAppsSection(const uint8_t* address) {
-  return address >= &_external_apps_flash_start &&
-         address < &_external_apps_flash_end;
+  return address >= storageStart() && address < storageEnd();
 }
 
 uint32_t App::appInfo(AppInfo info) const {
@@ -119,8 +177,8 @@ AppIterator& AppIterator::operator++() {
   m_currentAddress += sizeOfCurrentApp;
   // Find the next address aligned on external apps sector size
   m_currentAddress = nextSectorAlignedAddress(m_currentAddress);
-  if (m_currentAddress < &_external_apps_flash_start ||
-      m_currentAddress + App::k_minAppSize > &_external_apps_flash_end ||
+  if (m_currentAddress < storageStart() ||
+      m_currentAddress + App::k_minAppSize > storageEnd() ||
       !appAtAddress(m_currentAddress)) {
     m_currentAddress = nullptr;
   }
@@ -130,12 +188,12 @@ AppIterator& AppIterator::operator++() {
 bool hideExternalApps(bool isExamModeActive) { return isExamModeActive; }
 
 AppIterator Apps::begin() const {
-  uint8_t* storageStart = &_external_apps_flash_start;
-  assert(nextSectorAlignedAddress(storageStart) == storageStart);
-  if (m_isExamModeActive || !appAtAddress(storageStart)) {
+  uint8_t* start = storageStart();
+  assert(nextSectorAlignedAddress(start) == start);
+  if (m_isExamModeActive || !appAtAddress(start)) {
     return end();
   }
-  return AppIterator(storageStart);
+  return AppIterator(start);
 }
 
 int numberOfApps(bool isExamModeActive) {
@@ -149,6 +207,11 @@ int numberOfApps(bool isExamModeActive) {
 }
 
 void deleteApps(bool isExamModeActive, bool keepAfterCrash) {
+  initStorage();
+  if (s_usesOtherSlot) {
+    // Never erase the apps of the official software in the other slot
+    return;
+  }
   if (keepAfterCrash &&
       Ion::Reset::lastResetType() == Ion::Reset::ResetType::Software) {
     /* Keep external apps after a software crash.
