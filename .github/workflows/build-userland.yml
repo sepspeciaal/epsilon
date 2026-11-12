@@ -35,6 +35,15 @@ jobs:
           cp "$B" upload/userland.B.dfu
           ls -la upload
 
+      - name: Extra apps voor slot B klaarmaken
+        run: |
+          ELF=$(find epsilon/output -name "userland.allow3rdparty.B.elf" | head -1)
+          echo "ELF: $ELF"
+          $DOCKER_RUN "arm-none-eabi-nm $ELF" > userland.B.nm
+          grep -E "_external_apps_|InitialisationVector" userland.B.nm
+          python3 .github/scripts/build_extra_apps.py userland.B.nm upload
+          ls -la upload
+
       - name: Laten zien wat er gebouwd is
         if: always()
         run: find epsilon/output -name "*.dfu" -exec ls -la {} \;
@@ -43,5 +52,5 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: userland-n0120
-          path: upload/userland.*.dfu
+          path: upload/*.dfu
           if-no-files-found: error

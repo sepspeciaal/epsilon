@@ -24,14 +24,20 @@ bool appAtAddress(uint8_t* address) {
   return *reinterpret_cast<uint32_t*>(address) == k_magic;
 }
 
-/* Custom OS: when this userland runs in one slot and has no apps of its own,
- * it uses the apps installed (by the NumWorks website) in the other slot. */
-static uint8_t* s_storageStart = nullptr;
-static uint8_t* s_storageEnd = nullptr;
-static bool s_usesOtherSlot = false;
+/* Custom OS: apps can live in two places.
+ * - Region 0: this slot's own app space (filled by our build, extra_apps/).
+ * - Region 1: the app space of the other slot, where the NumWorks website
+ *   installs apps while the official software runs.
+ * Both are shown in the home screen. */
+struct AppRegion {
+  uint8_t* start;
+  uint8_t* end;
+};
+static AppRegion s_regions[2];
+static int s_numberOfRegions = -1;
 
 static bool looksLikeApp(uint8_t* address, uint8_t* end) {
-  if (!appAtAddress(address)) {
+  if (address + App::k_minAppSize > end || !appAtAddress(address)) {
     return false;
   }
   uint32_t* info = reinterpret_cast<uint32_t*>(address);
@@ -42,22 +48,22 @@ static bool looksLikeApp(uint8_t* address, uint8_t* end) {
 }
 
 static void initStorage() {
-  if (s_storageStart != nullptr) {
+  if (s_numberOfRegions >= 0) {
     return;
   }
-  s_storageStart = &_external_apps_flash_start;
-  s_storageEnd = &_external_apps_flash_end;
-  if (appAtAddress(s_storageStart)) {
-    return;
+  s_numberOfRegions = 0;
+  uint8_t* ownStart = &_external_apps_flash_start;
+  uint8_t* ownEnd = &_external_apps_flash_end;
+  if (looksLikeApp(ownStart, ownEnd)) {
+    s_regions[s_numberOfRegions++] = {ownStart, ownEnd};
   }
   constexpr uint32_t k_slotSize =
       Ion::Device::Board::Config::ExternalFlashLength / 2;
   constexpr uint32_t k_sector =
       Ion::Device::Board::Config::ExternalAppsSectorUnit;
-  bool runsInSlotB = reinterpret_cast<uint32_t>(s_storageStart) >=
+  bool runsInSlotB = reinterpret_cast<uint32_t>(ownStart) >=
                      Ion::Device::Board::Config::SlotBOrigin;
-  uint8_t* otherEnd =
-      runsInSlotB ? s_storageEnd - k_slotSize : s_storageEnd + k_slotSize;
+  uint8_t* otherEnd = runsInSlotB ? ownEnd - k_slotSize : ownEnd + k_slotSize;
   uint8_t* otherSlotStart =
       reinterpret_cast<uint8_t*>(runsInSlotB
                                      ? Ion::Device::Board::Config::SlotAOrigin
@@ -65,22 +71,20 @@ static void initStorage() {
   for (uint8_t* address = otherSlotStart + k_sector;
        address + App::k_minAppSize <= otherEnd; address += k_sector) {
     if (looksLikeApp(address, otherEnd)) {
-      s_storageStart = address;
-      s_storageEnd = otherEnd;
-      s_usesOtherSlot = true;
-      return;
+      s_regions[s_numberOfRegions++] = {address, otherEnd};
+      break;
     }
   }
 }
 
-static uint8_t* storageStart() {
+static int regionOf(const uint8_t* address) {
   initStorage();
-  return s_storageStart;
-}
-
-static uint8_t* storageEnd() {
-  initStorage();
-  return s_storageEnd;
+  for (int i = 0; i < s_numberOfRegions; i++) {
+    if (address >= s_regions[i].start && address < s_regions[i].end) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 App::App(uint8_t* a) : m_startAddress(a) {
@@ -88,7 +92,7 @@ App::App(uint8_t* a) : m_startAddress(a) {
 }
 
 bool addressWithinExternalAppsSection(const uint8_t* address) {
-  return address >= storageStart() && address < storageEnd();
+  return regionOf(address) >= 0;
 }
 
 uint32_t App::appInfo(AppInfo info) const {
@@ -172,15 +176,18 @@ uint8_t* nextSectorAlignedAddress(uint8_t* address) {
 }
 
 AppIterator& AppIterator::operator++() {
+  int region = regionOf(m_currentAddress);
   uint32_t sizeOfCurrentApp =
       *reinterpret_cast<uint32_t*>(m_currentAddress + 6 * sizeof(uint32_t));
-  m_currentAddress += sizeOfCurrentApp;
-  // Find the next address aligned on external apps sector size
-  m_currentAddress = nextSectorAlignedAddress(m_currentAddress);
-  if (m_currentAddress < storageStart() ||
-      m_currentAddress + App::k_minAppSize > storageEnd() ||
-      !appAtAddress(m_currentAddress)) {
-    m_currentAddress = nullptr;
+  uint8_t* next = nextSectorAlignedAddress(m_currentAddress + sizeOfCurrentApp);
+  if (region >= 0 && looksLikeApp(next, s_regions[region].end)) {
+    m_currentAddress = next;
+    return *this;
+  }
+  // Continue with the next region, if any
+  m_currentAddress = nullptr;
+  if (region >= 0 && region + 1 < s_numberOfRegions) {
+    m_currentAddress = s_regions[region + 1].start;
   }
   return *this;
 }
@@ -188,12 +195,11 @@ AppIterator& AppIterator::operator++() {
 bool hideExternalApps(bool isExamModeActive) { return isExamModeActive; }
 
 AppIterator Apps::begin() const {
-  uint8_t* start = storageStart();
-  assert(nextSectorAlignedAddress(start) == start);
-  if (m_isExamModeActive || !appAtAddress(start)) {
+  initStorage();
+  if (m_isExamModeActive || s_numberOfRegions == 0) {
     return end();
   }
-  return AppIterator(start);
+  return AppIterator(s_regions[0].start);
 }
 
 int numberOfApps(bool isExamModeActive) {
@@ -207,22 +213,10 @@ int numberOfApps(bool isExamModeActive) {
 }
 
 void deleteApps(bool isExamModeActive, bool keepAfterCrash) {
-  initStorage();
-  if (s_usesOtherSlot) {
-    // Never erase the apps of the official software in the other slot
-    return;
-  }
-  if (keepAfterCrash &&
-      Ion::Reset::lastResetType() == Ion::Reset::ResetType::Software) {
-    /* Keep external apps after a software crash.
-     * A voluntary software reset (from the settings menu) calls with
-     * keepAfterCrash = false. */
-    return;
-  }
-  for (App a : Apps(isExamModeActive)) {
-    assert(!hideExternalApps(isExamModeActive));
-    a.eraseMagicCode();
-  }
+  /* Custom OS: never erase apps. The extra apps are part of our build, and the
+   * apps of the other slot belong to the official software. */
+  (void)isExamModeActive;
+  (void)keepAfterCrash;
 }
 
 bool allowThirdParty() { return true; }
