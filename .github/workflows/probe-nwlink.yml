@@ -10,10 +10,10 @@ jobs:
       - run: npx --yes nwlink@latest --help || true
       - run: npx --yes nwlink@latest nwa-bin --help || true
       - run: npx --yes nwlink@latest install-nwa --help || true
-      - name: Show source of nwa-bin
+      - name: Show header parsing
         run: |
-          D=$(dirname $(npm root -g))
           npm install --prefix /tmp/nw nwlink@latest >/dev/null 2>&1
-          ls /tmp/nw/node_modules/nwlink /tmp/nw/node_modules/nwlink/dist
           cd /tmp/nw/node_modules/nwlink/dist
-          for f in $(ls *.js | head -20); do echo "=== $f"; grep -o -E ".{0,200}(nwa-bin|nwaBin|relocat|0x90|storageAddress|getStorage|externalApps).{0,300}" $f | head -20; done
+          grep -o -E ".{0,400}trampolineAddress.{0,400}" index.js | head -12
+          echo ======
+          grep -o -E ".{0,300}(extractInfos|kernelHeader|parseKernel|0x90010000|0x90410000|0x08000000|internalFlash).{0,300}" index.js | head -12
